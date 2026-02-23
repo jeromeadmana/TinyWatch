@@ -1,13 +1,55 @@
-import React from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { View, Text, StyleSheet, SafeAreaView } from "react-native";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
+import {
+  mediaDevices,
+  RTCView,
+  MediaStream,
+} from "react-native-webrtc";
+import { useKeepAwake } from "expo-keep-awake";
 import type { RootStackParamList } from "../types/navigation";
 import { useAppStore } from "../store/useAppStore";
+import PermissionGate from "../components/PermissionGate";
 
 type Props = NativeStackScreenProps<RootStackParamList, "Sender">;
 
-export default function SenderScreen({ navigation }: Props) {
+function CameraPreview({ navigation }: Props) {
+  useKeepAwake();
+  const [localStream, setLocalStream] = useState<MediaStream | null>(null);
   const connectionStatus = useAppStore((s) => s.connectionStatus);
+  const streamRef = useRef<MediaStream | null>(null);
+
+  useEffect(() => {
+    let mounted = true;
+
+    async function startCamera() {
+      try {
+        const stream = (await mediaDevices.getUserMedia({
+          video: { facingMode: "environment", width: 640, height: 480 },
+          audio: true,
+        })) as MediaStream;
+
+        if (mounted) {
+          streamRef.current = stream;
+          setLocalStream(stream);
+        } else {
+          stream.getTracks().forEach((t) => t.stop());
+        }
+      } catch (err) {
+        console.error("Failed to get user media:", err);
+      }
+    }
+
+    startCamera();
+
+    return () => {
+      mounted = false;
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach((t) => t.stop());
+        streamRef.current = null;
+      }
+    };
+  }, []);
 
   return (
     <SafeAreaView style={styles.container}>
@@ -17,13 +59,26 @@ export default function SenderScreen({ navigation }: Props) {
       </View>
 
       <View style={styles.preview}>
-        <Text style={styles.placeholderText}>Camera preview will appear here</Text>
+        {localStream ? (
+          <RTCView
+            streamURL={localStream.toURL()}
+            style={styles.rtcView}
+            objectFit="cover"
+            mirror={false}
+          />
+        ) : (
+          <Text style={styles.placeholderText}>Starting camera...</Text>
+        )}
       </View>
 
       <View style={styles.footer}>
         <Text
           style={styles.backLink}
           onPress={() => {
+            if (streamRef.current) {
+              streamRef.current.getTracks().forEach((t) => t.stop());
+              streamRef.current = null;
+            }
             useAppStore.getState().reset();
             navigation.navigate("RoleSelection");
           }}
@@ -32,6 +87,14 @@ export default function SenderScreen({ navigation }: Props) {
         </Text>
       </View>
     </SafeAreaView>
+  );
+}
+
+export default function SenderScreen(props: Props) {
+  return (
+    <PermissionGate>
+      <CameraPreview {...props} />
+    </PermissionGate>
   );
 }
 
@@ -59,8 +122,13 @@ const styles = StyleSheet.create({
     margin: 16,
     borderRadius: 12,
     backgroundColor: "#0f0f1a",
+    overflow: "hidden",
     justifyContent: "center",
     alignItems: "center",
+  },
+  rtcView: {
+    width: "100%",
+    height: "100%",
   },
   placeholderText: {
     color: "#555577",

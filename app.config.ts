@@ -39,5 +39,8 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
       "BLUETOOTH_CONNECT",
     ],
   },
-  plugins: ["expo-dev-client"],
+  plugins: [
+    "expo-dev-client",
+    "@config-plugins/react-native-webrtc",
+  ],
 });

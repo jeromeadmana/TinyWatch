@@ -1,12 +1,14 @@
 import React from "react";
 import { View, Text, StyleSheet, SafeAreaView } from "react-native";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
+import { useKeepAwake } from "expo-keep-awake";
 import type { RootStackParamList } from "../types/navigation";
 import { useAppStore } from "../store/useAppStore";
 
 type Props = NativeStackScreenProps<RootStackParamList, "Receiver">;
 
 export default function ReceiverScreen({ navigation }: Props) {
+  useKeepAwake();
   const connectionStatus = useAppStore((s) => s.connectionStatus);
 
   return (
@@ -17,7 +19,9 @@ export default function ReceiverScreen({ navigation }: Props) {
       </View>
 
       <View style={styles.videoArea}>
-        <Text style={styles.placeholderText}>Remote video will appear here</Text>
+        <Text style={styles.placeholderText}>
+          Waiting for connection to camera...
+        </Text>
       </View>
 
       <View style={styles.footer}>
@@ -59,6 +63,7 @@ const styles = StyleSheet.create({
     margin: 16,
     borderRadius: 12,
     backgroundColor: "#0f0f1a",
+    overflow: "hidden",
     justifyContent: "center",
     alignItems: "center",
   },
