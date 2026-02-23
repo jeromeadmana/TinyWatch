@@ -1,4 +1,5 @@
 import { Platform, PermissionsAndroid } from "react-native";
+import { mediaDevices } from "react-native-webrtc";
 
 export type PermissionStatus = "granted" | "denied" | "undetermined";
 
@@ -22,10 +23,17 @@ export async function requestCameraAndMicPermissions(): Promise<PermissionStatus
     return "denied";
   }
 
-  // iOS: getUserMedia triggers the system permission prompt.
-  // Return "undetermined" so PermissionGate shows a pre-prompt screen first,
-  // rather than assuming permissions are granted.
-  return "undetermined";
+  // iOS: trigger the system permission prompt via a brief getUserMedia call.
+  // This is the standard way to request camera/mic permissions with react-native-webrtc on iOS.
+  try {
+    const stream = await mediaDevices.getUserMedia({ video: true, audio: true });
+    // Stop the tracks immediately — we just needed the permission prompt
+    stream.getTracks().forEach((t: { stop: () => void }) => t.stop());
+    (stream as any).release?.(true);
+    return "granted";
+  } catch {
+    return "denied";
+  }
 }
 
 export async function checkCameraAndMicPermissions(): Promise<PermissionStatus> {
@@ -41,6 +49,7 @@ export async function checkCameraAndMicPermissions(): Promise<PermissionStatus> 
     return "undetermined";
   }
 
-  // iOS: no reliable way to check without requesting; assume undetermined
+  // iOS: no reliable way to check without requesting; assume undetermined.
+  // The PermissionGate will show "Grant Permissions" which triggers requestCameraAndMicPermissions.
   return "undetermined";
 }

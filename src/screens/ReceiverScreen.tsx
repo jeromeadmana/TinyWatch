@@ -11,9 +11,12 @@ import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { activateKeepAwake, deactivateKeepAwake } from "expo-keep-awake";
 import type { RootStackParamList } from "../types/navigation";
 import { useAppStore } from "../store/useAppStore";
+import TcpSocket from "react-native-tcp-socket";
 import { useSignalingClient } from "../hooks/useSignaling";
 
 type Props = NativeStackScreenProps<RootStackParamList, "Receiver">;
+
+const IP_V4_REGEX = /^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$/;
 
 export default function ReceiverScreen({ navigation }: Props) {
   const connectionStatus = useAppStore((s) => s.connectionStatus);
@@ -29,6 +32,11 @@ export default function ReceiverScreen({ navigation }: Props) {
   const handleConnect = () => {
     const ip = ipInput.trim();
     if (!ip) return;
+    if (!IP_V4_REGEX.test(ip) || !TcpSocket.isIPv4(ip)) {
+      useAppStore.getState().setError("Please enter a valid IPv4 address");
+      return;
+    }
+    useAppStore.getState().setError(null);
     connect(ip);
   };
 

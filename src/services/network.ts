@@ -1,48 +1,18 @@
-import { Platform } from "react-native";
 import TcpSocket from "react-native-tcp-socket";
 
 /**
- * Get the device's local IP address by briefly binding a TCP server
- * to the wifi interface and reading the assigned address.
+ * Get the device's local IP address by briefly connecting a socket.
+ * The socket triggers a route lookup which reveals the local address.
+ * No data is actually sent to the remote host.
  */
 export async function getLocalIpAddress(): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const server = TcpSocket.createServer(() => {});
-
-    server.on("error", (err) => {
-      server.close();
-      reject(err);
-    });
-
-    server.listen(
-      { port: 0, host: "0.0.0.0" },
-      () => {
-        const addr = server.address();
-        server.close();
-        if (addr && "address" in addr && addr.address !== "0.0.0.0") {
-          resolve(addr.address);
-        } else {
-          // Fallback: on some devices the server binds to 0.0.0.0
-          // Try using interface-specific binding
-          resolve(getLocalIpFallback());
-        }
-      }
-    );
-  });
-}
-
-/**
- * Fallback: connect a socket to a known external address (doesn't send data)
- * to discover the local IP address.
- */
-function getLocalIpFallback(): Promise<string> {
   return new Promise((resolve, reject) => {
     const socket = TcpSocket.createConnection(
       {
         port: 80,
-        host: "192.168.0.1",
+        host: "8.8.8.8", // Any routable address — no data is sent
         interface: "wifi",
-        connectTimeout: 2000,
+        connectTimeout: 3000,
       },
       () => {
         const localAddr = socket.localAddress;
@@ -57,7 +27,6 @@ function getLocalIpFallback(): Promise<string> {
 
     socket.on("error", () => {
       socket.destroy();
-      // Last resort — return common default
       reject(new Error("Could not determine local IP address"));
     });
   });

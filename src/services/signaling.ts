@@ -1,6 +1,6 @@
 import TcpSocket from "react-native-tcp-socket";
 import type { SignalingMessage } from "../types/signaling";
-import { SIGNALING_PORT } from "../constants/network";
+import { SIGNALING_PORT, CONNECT_TIMEOUT_MS } from "../constants/network";
 
 type MessageHandler = (message: SignalingMessage) => void;
 type StatusHandler = (status: "listening" | "connected" | "disconnected" | "error", error?: string) => void;
@@ -14,6 +14,8 @@ interface SignalingClient {
   close: () => void;
 }
 
+const MAX_BUFFER_SIZE = 64 * 1024; // 64 KB — generous for signaling messages
+
 /**
  * Parse newline-delimited JSON from a TCP data buffer.
  * Handles partial messages by maintaining a buffer string.
@@ -24,6 +26,12 @@ function createMessageParser(onMessage: MessageHandler) {
   return (data: Buffer | string) => {
     buffer += typeof data === "string" ? data : data.toString("utf-8");
 
+    if (buffer.length > MAX_BUFFER_SIZE) {
+      console.error("Signaling: message buffer exceeded maximum size, dropping");
+      buffer = "";
+      return;
+    }
+
     const lines = buffer.split("\n");
     // Last element is either empty (if buffer ended with \n) or a partial message
     buffer = lines.pop() ?? "";
@@ -32,13 +40,23 @@ function createMessageParser(onMessage: MessageHandler) {
       const trimmed = line.trim();
       if (!trimmed) continue;
       try {
-        const msg = JSON.parse(trimmed) as SignalingMessage;
-        onMessage(msg);
+        const parsed = JSON.parse(trimmed);
+        if (isValidSignalingMessage(parsed)) {
+          onMessage(parsed);
+        } else {
+          console.warn("Signaling: unknown message type:", parsed?.type);
+        }
       } catch {
         console.warn("Signaling: failed to parse message:", trimmed);
       }
     }
   };
+}
+
+function isValidSignalingMessage(obj: unknown): obj is SignalingMessage {
+  if (typeof obj !== "object" || obj === null) return false;
+  const type = (obj as { type?: unknown }).type;
+  return type === "offer" || type === "answer" || type === "ice-candidate" || type === "bye";
 }
 
 /**
@@ -68,16 +86,15 @@ export function startSignalingServer(
 
     socket.on("data", parse);
 
-    socket.on("close", () => {
+    socket.on("close", (hadError) => {
       clientSocket = null;
-      if (!serverClosed) {
+      if (!serverClosed && !hadError) {
         onStatus("disconnected");
       }
     });
 
     socket.on("error", (err) => {
       console.error("Signaling server socket error:", err);
-      clientSocket = null;
       if (!serverClosed) {
         onStatus("error", err.message);
       }
@@ -102,6 +119,8 @@ export function startSignalingServer(
     send(message: SignalingMessage) {
       if (clientSocket && !clientSocket.destroyed) {
         clientSocket.write(JSON.stringify(message) + "\n");
+      } else {
+        console.warn("Signaling: cannot send, no client connected. Type:", message.type);
       }
     },
     close() {
@@ -110,7 +129,9 @@ export function startSignalingServer(
         clientSocket.destroy();
         clientSocket = null;
       }
-      server.close();
+      server.close((err) => {
+        if (err) console.warn("Signaling server close error:", err.message);
+      });
     },
   };
 }
@@ -131,24 +152,23 @@ export function connectToSignalingServer(
       port: SIGNALING_PORT,
       host,
       interface: "wifi",
-      connectTimeout: 10000,
+      connectTimeout: CONNECT_TIMEOUT_MS,
     },
     () => {
       if (!closed) {
+        socket.setEncoding("utf-8");
+        socket.setNoDelay(true);
         onStatus("connected");
       }
     }
   );
 
-  socket.setEncoding("utf-8");
-  socket.setNoDelay(true);
-
   const parse = createMessageParser(onMessage);
 
   socket.on("data", parse);
 
-  socket.on("close", () => {
-    if (!closed) {
+  socket.on("close", (hadError) => {
+    if (!closed && !hadError) {
       onStatus("disconnected");
     }
   });
@@ -164,6 +184,8 @@ export function connectToSignalingServer(
     send(message: SignalingMessage) {
       if (!socket.destroyed) {
         socket.write(JSON.stringify(message) + "\n");
+      } else {
+        console.warn("Signaling: cannot send, socket destroyed. Type:", message.type);
       }
     },
     close() {
