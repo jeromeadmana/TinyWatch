@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useRef, useState, useCallback } from "react";
 import { View, Text, StyleSheet, SafeAreaView } from "react-native";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import {
@@ -10,6 +10,9 @@ import { useKeepAwake } from "expo-keep-awake";
 import type { RootStackParamList } from "../types/navigation";
 import { useAppStore } from "../store/useAppStore";
 import PermissionGate from "../components/PermissionGate";
+import { useSignalingServer } from "../hooks/useSignaling";
+import { getLocalIpAddress } from "../services/network";
+import { SIGNALING_PORT } from "../constants/network";
 
 type Props = NativeStackScreenProps<RootStackParamList, "Sender">;
 
@@ -18,8 +21,25 @@ function CameraPreview({ navigation }: Props) {
   const [localStream, setLocalStream] = useState<MediaStream | null>(null);
   const connectionStatus = useAppStore((s) => s.connectionStatus);
   const errorMessage = useAppStore((s) => s.errorMessage);
+  const localIp = useAppStore((s) => s.localIp);
   const streamRef = useRef<MediaStream | null>(null);
 
+  // TCP signaling server — messages will be handled in Phase 4
+  const onSignalingMessage = useCallback(() => {
+    // Will be wired to WebRTC in Phase 4
+  }, []);
+  useSignalingServer(onSignalingMessage);
+
+  // Resolve local IP address
+  useEffect(() => {
+    getLocalIpAddress()
+      .then((ip) => useAppStore.getState().setLocalIp(ip))
+      .catch((err) =>
+        console.warn("Could not determine local IP:", err.message)
+      );
+  }, []);
+
+  // Start camera
   useEffect(() => {
     let mounted = true;
 
@@ -90,6 +110,13 @@ function CameraPreview({ navigation }: Props) {
       </View>
 
       <View style={styles.footer}>
+        {localIp ? (
+          <Text style={styles.ipText}>
+            IP: {localIp}:{SIGNALING_PORT}
+          </Text>
+        ) : (
+          <Text style={styles.ipText}>Detecting IP address...</Text>
+        )}
         <Text
           style={styles.backLink}
           onPress={() => {
@@ -160,6 +187,12 @@ const styles = StyleSheet.create({
   footer: {
     padding: 20,
     alignItems: "center",
+  },
+  ipText: {
+    color: "#aaaacc",
+    fontSize: 16,
+    fontFamily: "monospace",
+    marginBottom: 12,
   },
   backLink: {
     color: "#6666aa",

@@ -1,14 +1,36 @@
-import React, { useEffect } from "react";
-import { View, Text, StyleSheet, SafeAreaView } from "react-native";
+import React, { useEffect, useState, useCallback } from "react";
+import {
+  View,
+  Text,
+  StyleSheet,
+  SafeAreaView,
+  TextInput,
+  TouchableOpacity,
+} from "react-native";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { activateKeepAwake, deactivateKeepAwake } from "expo-keep-awake";
 import type { RootStackParamList } from "../types/navigation";
 import { useAppStore } from "../store/useAppStore";
+import { useSignalingClient } from "../hooks/useSignaling";
 
 type Props = NativeStackScreenProps<RootStackParamList, "Receiver">;
 
 export default function ReceiverScreen({ navigation }: Props) {
   const connectionStatus = useAppStore((s) => s.connectionStatus);
+  const errorMessage = useAppStore((s) => s.errorMessage);
+  const [ipInput, setIpInput] = useState("");
+
+  // TCP signaling client — messages will be handled in Phase 4
+  const onSignalingMessage = useCallback(() => {
+    // Will be wired to WebRTC in Phase 4
+  }, []);
+  const { connect } = useSignalingClient(onSignalingMessage);
+
+  const handleConnect = () => {
+    const ip = ipInput.trim();
+    if (!ip) return;
+    connect(ip);
+  };
 
   // Only keep screen awake when actively connected
   useEffect(() => {
@@ -27,6 +49,10 @@ export default function ReceiverScreen({ navigation }: Props) {
     };
   }, []);
 
+  const isConnecting =
+    connectionStatus === "signaling" || connectionStatus === "connecting";
+  const isConnected = connectionStatus === "connected";
+
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
@@ -35,10 +61,44 @@ export default function ReceiverScreen({ navigation }: Props) {
       </View>
 
       <View style={styles.videoArea}>
-        <Text style={styles.placeholderText}>
-          Waiting for connection to camera...
-        </Text>
+        {isConnected ? (
+          <Text style={styles.placeholderText}>
+            Connected! Video will appear here in Phase 4.
+          </Text>
+        ) : (
+          <Text style={styles.placeholderText}>
+            Enter the camera's IP address to connect
+          </Text>
+        )}
       </View>
+
+      {!isConnected && (
+        <View style={styles.connectSection}>
+          <TextInput
+            style={styles.ipInput}
+            placeholder="e.g. 192.168.1.42"
+            placeholderTextColor="#555577"
+            value={ipInput}
+            onChangeText={setIpInput}
+            keyboardType="numeric"
+            autoCorrect={false}
+            autoCapitalize="none"
+            editable={!isConnecting}
+          />
+          <TouchableOpacity
+            style={[styles.connectButton, isConnecting && styles.connectButtonDisabled]}
+            onPress={handleConnect}
+            disabled={isConnecting || !ipInput.trim()}
+          >
+            <Text style={styles.connectButtonText}>
+              {isConnecting ? "Connecting..." : "Connect"}
+            </Text>
+          </TouchableOpacity>
+          {errorMessage && (
+            <Text style={styles.errorText}>{errorMessage}</Text>
+          )}
+        </View>
+      )}
 
       <View style={styles.footer}>
         <Text
@@ -85,6 +145,49 @@ const styles = StyleSheet.create({
   placeholderText: {
     color: "#555577",
     fontSize: 16,
+    textAlign: "center",
+    paddingHorizontal: 20,
+  },
+  connectSection: {
+    paddingHorizontal: 20,
+    paddingBottom: 8,
+    alignItems: "center",
+  },
+  ipInput: {
+    width: "100%",
+    backgroundColor: "#0f0f1a",
+    borderWidth: 1,
+    borderColor: "#0f3460",
+    borderRadius: 10,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    color: "#e0e0e0",
+    fontSize: 18,
+    fontFamily: "monospace",
+    textAlign: "center",
+  },
+  connectButton: {
+    marginTop: 12,
+    backgroundColor: "#0f3460",
+    paddingHorizontal: 32,
+    paddingVertical: 14,
+    borderRadius: 10,
+    width: "100%",
+    alignItems: "center",
+  },
+  connectButtonDisabled: {
+    opacity: 0.5,
+  },
+  connectButtonText: {
+    color: "#e0e0e0",
+    fontSize: 16,
+    fontWeight: "600",
+  },
+  errorText: {
+    color: "#aa6666",
+    fontSize: 14,
+    textAlign: "center",
+    marginTop: 10,
   },
   footer: {
     padding: 20,
