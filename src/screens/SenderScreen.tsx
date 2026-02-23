@@ -17,6 +17,7 @@ function CameraPreview({ navigation }: Props) {
   useKeepAwake();
   const [localStream, setLocalStream] = useState<MediaStream | null>(null);
   const connectionStatus = useAppStore((s) => s.connectionStatus);
+  const errorMessage = useAppStore((s) => s.errorMessage);
   const streamRef = useRef<MediaStream | null>(null);
 
   useEffect(() => {
@@ -24,19 +25,25 @@ function CameraPreview({ navigation }: Props) {
 
     async function startCamera() {
       try {
-        const stream = (await mediaDevices.getUserMedia({
+        const stream = await mediaDevices.getUserMedia({
           video: { facingMode: "environment", width: 640, height: 480 },
           audio: true,
-        })) as MediaStream;
+        });
 
         if (mounted) {
           streamRef.current = stream;
           setLocalStream(stream);
         } else {
-          stream.getTracks().forEach((t) => t.stop());
+          stream.release(true);
         }
       } catch (err) {
         console.error("Failed to get user media:", err);
+        if (mounted) {
+          useAppStore.getState().setError(
+            err instanceof Error ? err.message : "Failed to start camera"
+          );
+          useAppStore.getState().setConnectionStatus("error");
+        }
       }
     }
 
@@ -45,11 +52,20 @@ function CameraPreview({ navigation }: Props) {
     return () => {
       mounted = false;
       if (streamRef.current) {
-        streamRef.current.getTracks().forEach((t) => t.stop());
+        streamRef.current.release(true);
         streamRef.current = null;
       }
     };
   }, []);
+
+  // Reset store state on unmount (covers Android hardware back button)
+  useEffect(() => {
+    return () => {
+      useAppStore.getState().reset();
+    };
+  }, []);
+
+  const streamURL = localStream?.toURL() ?? "";
 
   return (
     <SafeAreaView style={styles.container}>
@@ -59,9 +75,11 @@ function CameraPreview({ navigation }: Props) {
       </View>
 
       <View style={styles.preview}>
-        {localStream ? (
+        {errorMessage ? (
+          <Text style={styles.errorText}>{errorMessage}</Text>
+        ) : localStream ? (
           <RTCView
-            streamURL={localStream.toURL()}
+            streamURL={streamURL}
             style={styles.rtcView}
             objectFit="cover"
             mirror={false}
@@ -76,10 +94,9 @@ function CameraPreview({ navigation }: Props) {
           style={styles.backLink}
           onPress={() => {
             if (streamRef.current) {
-              streamRef.current.getTracks().forEach((t) => t.stop());
+              streamRef.current.release(true);
               streamRef.current = null;
             }
-            useAppStore.getState().reset();
             navigation.navigate("RoleSelection");
           }}
         >
@@ -133,6 +150,12 @@ const styles = StyleSheet.create({
   placeholderText: {
     color: "#555577",
     fontSize: 16,
+  },
+  errorText: {
+    color: "#aa6666",
+    fontSize: 15,
+    textAlign: "center",
+    paddingHorizontal: 20,
   },
   footer: {
     padding: 20,

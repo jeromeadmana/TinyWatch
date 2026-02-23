@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
+import { AppState } from "react-native";
 import {
   PermissionStatus,
   requestCameraAndMicPermissions,
@@ -14,6 +15,16 @@ export function usePermissions() {
       setStatus(result);
       setChecking(false);
     });
+  }, []);
+
+  // Re-check permissions when app returns to foreground (e.g. from Settings)
+  useEffect(() => {
+    const subscription = AppState.addEventListener("change", (nextState) => {
+      if (nextState === "active") {
+        checkCameraAndMicPermissions().then(setStatus);
+      }
+    });
+    return () => subscription.remove();
   }, []);
 
   const request = useCallback(async () => {

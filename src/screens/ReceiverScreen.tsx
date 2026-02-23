@@ -1,15 +1,31 @@
-import React from "react";
+import React, { useEffect } from "react";
 import { View, Text, StyleSheet, SafeAreaView } from "react-native";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
-import { useKeepAwake } from "expo-keep-awake";
+import { activateKeepAwake, deactivateKeepAwake } from "expo-keep-awake";
 import type { RootStackParamList } from "../types/navigation";
 import { useAppStore } from "../store/useAppStore";
 
 type Props = NativeStackScreenProps<RootStackParamList, "Receiver">;
 
 export default function ReceiverScreen({ navigation }: Props) {
-  useKeepAwake();
   const connectionStatus = useAppStore((s) => s.connectionStatus);
+
+  // Only keep screen awake when actively connected
+  useEffect(() => {
+    if (connectionStatus === "connected") {
+      activateKeepAwake();
+    } else {
+      deactivateKeepAwake();
+    }
+    return () => { deactivateKeepAwake(); };
+  }, [connectionStatus]);
+
+  // Reset store state on unmount (covers Android hardware back button)
+  useEffect(() => {
+    return () => {
+      useAppStore.getState().reset();
+    };
+  }, []);
 
   return (
     <SafeAreaView style={styles.container}>
@@ -28,7 +44,6 @@ export default function ReceiverScreen({ navigation }: Props) {
         <Text
           style={styles.backLink}
           onPress={() => {
-            useAppStore.getState().reset();
             navigation.navigate("RoleSelection");
           }}
         >

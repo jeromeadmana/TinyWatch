@@ -9,19 +9,23 @@ export async function requestCameraAndMicPermissions(): Promise<PermissionStatus
       PermissionsAndroid.PERMISSIONS.RECORD_AUDIO,
     ]);
 
-    const cameraGranted =
-      grants[PermissionsAndroid.PERMISSIONS.CAMERA] ===
-      PermissionsAndroid.RESULTS.GRANTED;
-    const micGranted =
-      grants[PermissionsAndroid.PERMISSIONS.RECORD_AUDIO] ===
-      PermissionsAndroid.RESULTS.GRANTED;
+    const cameraResult = grants[PermissionsAndroid.PERMISSIONS.CAMERA];
+    const micResult = grants[PermissionsAndroid.PERMISSIONS.RECORD_AUDIO];
 
-    if (cameraGranted && micGranted) return "granted";
+    if (
+      cameraResult === PermissionsAndroid.RESULTS.GRANTED &&
+      micResult === PermissionsAndroid.RESULTS.GRANTED
+    ) {
+      return "granted";
+    }
+
     return "denied";
   }
 
-  // iOS permissions are handled by react-native-webrtc's getUserMedia call
-  return "granted";
+  // iOS: getUserMedia triggers the system permission prompt.
+  // Return "undetermined" so PermissionGate shows a pre-prompt screen first,
+  // rather than assuming permissions are granted.
+  return "undetermined";
 }
 
 export async function checkCameraAndMicPermissions(): Promise<PermissionStatus> {
@@ -37,5 +41,6 @@ export async function checkCameraAndMicPermissions(): Promise<PermissionStatus> 
     return "undetermined";
   }
 
+  // iOS: no reliable way to check without requesting; assume undetermined
   return "undetermined";
 }
