@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState, useCallback } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { View, Text, StyleSheet, SafeAreaView } from "react-native";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import {
@@ -11,6 +11,7 @@ import type { RootStackParamList } from "../types/navigation";
 import { useAppStore } from "../store/useAppStore";
 import PermissionGate from "../components/PermissionGate";
 import { useSignalingServer } from "../hooks/useSignaling";
+import { useSenderWebRTC } from "../hooks/useWebRTC";
 import { getLocalIpAddress } from "../services/network";
 import { SIGNALING_PORT } from "../constants/network";
 
@@ -24,11 +25,13 @@ function CameraPreview({ navigation }: Props) {
   const localIp = useAppStore((s) => s.localIp);
   const streamRef = useRef<MediaStream | null>(null);
 
-  // TCP signaling server — messages will be handled in Phase 4
-  const onSignalingMessage = useCallback(() => {
-    // Will be wired to WebRTC in Phase 4
-  }, []);
-  useSignalingServer(onSignalingMessage);
+  // TCP signaling server — pass incoming messages to WebRTC
+  const { send } = useSignalingServer((msg) => {
+    webrtcHandlers.onSignalingMessage(msg);
+  });
+
+  // WebRTC peer connection — creates offer when localStream is ready
+  const webrtcHandlers = useSenderWebRTC(localStream, send);
 
   // Resolve local IP address
   useEffect(() => {
@@ -87,11 +90,29 @@ function CameraPreview({ navigation }: Props) {
 
   const streamURL = localStream?.toURL() ?? "";
 
+  const statusLabel =
+    connectionStatus === "connected"
+      ? "Streaming to viewer"
+      : connectionStatus === "signaling"
+        ? "Waiting for viewer..."
+        : connectionStatus === "connecting"
+          ? "Connecting..."
+          : connectionStatus === "error"
+            ? "Error"
+            : connectionStatus;
+
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
         <Text style={styles.title}>Camera Mode</Text>
-        <Text style={styles.status}>{connectionStatus}</Text>
+        <Text
+          style={[
+            styles.status,
+            connectionStatus === "connected" && styles.statusConnected,
+          ]}
+        >
+          {statusLabel}
+        </Text>
       </View>
 
       <View style={styles.preview}>
@@ -160,6 +181,9 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: "#8888aa",
     marginTop: 4,
+  },
+  statusConnected: {
+    color: "#66aa66",
   },
   preview: {
     flex: 1,

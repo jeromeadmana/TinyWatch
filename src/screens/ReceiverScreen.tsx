@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from "react";
+import React, { useEffect, useState } from "react";
 import {
   View,
   Text,
@@ -8,11 +8,13 @@ import {
   TouchableOpacity,
 } from "react-native";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
+import { RTCView } from "react-native-webrtc";
 import { activateKeepAwake, deactivateKeepAwake } from "expo-keep-awake";
 import type { RootStackParamList } from "../types/navigation";
 import { useAppStore } from "../store/useAppStore";
 import TcpSocket from "react-native-tcp-socket";
 import { useSignalingClient } from "../hooks/useSignaling";
+import { useReceiverWebRTC } from "../hooks/useWebRTC";
 
 type Props = NativeStackScreenProps<RootStackParamList, "Receiver">;
 
@@ -23,11 +25,14 @@ export default function ReceiverScreen({ navigation }: Props) {
   const errorMessage = useAppStore((s) => s.errorMessage);
   const [ipInput, setIpInput] = useState("");
 
-  // TCP signaling client — messages will be handled in Phase 4
-  const onSignalingMessage = useCallback(() => {
-    // Will be wired to WebRTC in Phase 4
-  }, []);
-  const { connect } = useSignalingClient(onSignalingMessage);
+  // TCP signaling client — pass incoming messages to WebRTC
+  const { connect, send } = useSignalingClient((msg) => {
+    webrtcHandlers.onSignalingMessage(msg);
+  });
+
+  // WebRTC peer connection — activates when signaling is connected
+  const webrtcHandlers = useReceiverWebRTC(send);
+  const { remoteStream } = webrtcHandlers;
 
   const handleConnect = () => {
     const ip = ipInput.trim();
@@ -61,17 +66,46 @@ export default function ReceiverScreen({ navigation }: Props) {
     connectionStatus === "signaling" || connectionStatus === "connecting";
   const isConnected = connectionStatus === "connected";
 
+  const remoteStreamURL = remoteStream?.toURL() ?? "";
+
+  const statusLabel =
+    connectionStatus === "connected" && remoteStream
+      ? "Receiving stream"
+      : connectionStatus === "connected"
+        ? "Connected, waiting for video..."
+        : connectionStatus === "signaling"
+          ? "Connecting..."
+          : connectionStatus === "connecting"
+            ? "Setting up stream..."
+            : connectionStatus === "error"
+              ? "Error"
+              : connectionStatus;
+
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
         <Text style={styles.title}>Viewer Mode</Text>
-        <Text style={styles.status}>{connectionStatus}</Text>
+        <Text
+          style={[
+            styles.status,
+            isConnected && remoteStream && styles.statusConnected,
+          ]}
+        >
+          {statusLabel}
+        </Text>
       </View>
 
       <View style={styles.videoArea}>
-        {isConnected ? (
+        {remoteStream ? (
+          <RTCView
+            streamURL={remoteStreamURL}
+            style={styles.rtcView}
+            objectFit="contain"
+            mirror={false}
+          />
+        ) : isConnected ? (
           <Text style={styles.placeholderText}>
-            Connected! Video will appear here in Phase 4.
+            Waiting for video stream...
           </Text>
         ) : (
           <Text style={styles.placeholderText}>
@@ -141,6 +175,9 @@ const styles = StyleSheet.create({
     color: "#8888aa",
     marginTop: 4,
   },
+  statusConnected: {
+    color: "#66aa66",
+  },
   videoArea: {
     flex: 1,
     margin: 16,
@@ -149,6 +186,10 @@ const styles = StyleSheet.create({
     overflow: "hidden",
     justifyContent: "center",
     alignItems: "center",
+  },
+  rtcView: {
+    width: "100%",
+    height: "100%",
   },
   placeholderText: {
     color: "#555577",
