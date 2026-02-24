@@ -20,8 +20,9 @@ function mapConnectionState(state: string) {
       return "connecting" as const;
     case "connected":
       return "connected" as const;
-    case "disconnected":
     case "failed":
+      return "error" as const;
+    case "disconnected":
     case "closed":
       return "idle" as const;
     default:
@@ -30,18 +31,19 @@ function mapConnectionState(state: string) {
 }
 
 /**
- * Hook for the Sender: creates a WebRTC peer connection when a local stream
- * and signaling send function are available.
+ * Hook for the Sender: creates a WebRTC peer connection when signaling is
+ * connected and a local stream is available.
  * Returns a message handler to pass incoming signaling messages to WebRTC.
  */
 export function useSenderWebRTC(
   localStream: MediaStream | null,
   send: SendMessage,
+  signalingConnected: boolean,
 ) {
   const handleRef = useRef<WebRTCHandle | null>(null);
 
   useEffect(() => {
-    if (!localStream) return;
+    if (!localStream || !signalingConnected) return;
 
     const handle = createSenderPeerConnection(
       localStream,
@@ -60,7 +62,7 @@ export function useSenderWebRTC(
       handle.close();
       handleRef.current = null;
     };
-  }, [localStream, send]);
+  }, [localStream, send, signalingConnected]);
 
   const onSignalingMessage = useCallback(
     async (message: SignalingMessage) => {
@@ -73,19 +75,18 @@ export function useSenderWebRTC(
 }
 
 /**
- * Hook for the Receiver: creates a WebRTC peer connection when
- * signaling is connected. Returns the remote stream and a message handler.
+ * Hook for the Receiver: creates a WebRTC peer connection when signaling is
+ * connected. Returns the remote stream and a message handler.
  */
-export function useReceiverWebRTC(send: SendMessage) {
+export function useReceiverWebRTC(
+  send: SendMessage,
+  signalingConnected: boolean,
+) {
   const handleRef = useRef<WebRTCHandle | null>(null);
   const [remoteStream, setRemoteStream] = useState<MediaStream | null>(null);
-  const connectionStatus = useAppStore((s) => s.connectionStatus);
 
   useEffect(() => {
-    // Only create the peer connection once signaling is connected
-    if (connectionStatus !== "connected") return;
-    // Don't recreate if we already have a handle
-    if (handleRef.current) return;
+    if (!signalingConnected) return;
 
     const handle = createReceiverPeerConnection(
       send,
@@ -105,7 +106,7 @@ export function useReceiverWebRTC(send: SendMessage) {
       handleRef.current = null;
       setRemoteStream(null);
     };
-  }, [connectionStatus, send]);
+  }, [signalingConnected, send]);
 
   const onSignalingMessage = useCallback(
     async (message: SignalingMessage) => {

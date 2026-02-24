@@ -20,7 +20,7 @@ interface WebRTCHandle {
 /**
  * Create a WebRTC peer connection for the Sender (caller).
  * Adds local media tracks, creates an offer, and sends it via signaling.
- * ICE candidates are sent as they are gathered.
+ * ICE candidates are buffered until the remote description is set.
  */
 export function createSenderPeerConnection(
   localStream: MediaStream,
@@ -28,6 +28,9 @@ export function createSenderPeerConnection(
   onConnectionStateChange: OnConnectionStateChange,
 ): WebRTCHandle {
   const pc = new RTCPeerConnection(RTC_CONFIG);
+  let remoteDescSet = false;
+  let closed = false;
+  const pendingCandidates: RTCIceCandidate[] = [];
 
   // Add local tracks to the connection
   localStream.getTracks().forEach((track) => {
@@ -35,7 +38,7 @@ export function createSenderPeerConnection(
   });
 
   // Send ICE candidates to the receiver as they are gathered
-  (pc as any).addEventListener("icecandidate", (event: any) => {
+  const onIce = (event: any) => {
     if (event.candidate) {
       send({
         type: "ice-candidate",
@@ -44,11 +47,14 @@ export function createSenderPeerConnection(
         sdpMLineIndex: event.candidate.sdpMLineIndex ?? null,
       });
     }
-  });
+  };
 
-  (pc as any).addEventListener("connectionstatechange", () => {
+  const onConnState = () => {
     onConnectionStateChange(pc.connectionState);
-  });
+  };
+
+  (pc as any).addEventListener("icecandidate", onIce);
+  (pc as any).addEventListener("connectionstatechange", onConnState);
 
   // Create and send the offer
   (async () => {
@@ -61,6 +67,7 @@ export function createSenderPeerConnection(
       });
     } catch (err) {
       console.error("WebRTC: failed to create offer:", err);
+      onConnectionStateChange("failed");
     }
   })();
 
@@ -71,18 +78,27 @@ export function createSenderPeerConnection(
           await pc.setRemoteDescription(
             new RTCSessionDescription({ type: "answer", sdp: message.sdp })
           );
+          remoteDescSet = true;
+          for (const c of pendingCandidates) {
+            await pc.addIceCandidate(c);
+          }
+          pendingCandidates.length = 0;
           break;
-        case "ice-candidate":
-          await pc.addIceCandidate(
-            new RTCIceCandidate({
-              candidate: message.candidate,
-              sdpMid: message.sdpMid,
-              sdpMLineIndex: message.sdpMLineIndex,
-            })
-          );
+        case "ice-candidate": {
+          const candidate = new RTCIceCandidate({
+            candidate: message.candidate,
+            sdpMid: message.sdpMid,
+            sdpMLineIndex: message.sdpMLineIndex,
+          });
+          if (remoteDescSet) {
+            await pc.addIceCandidate(candidate);
+          } else {
+            pendingCandidates.push(candidate);
+          }
           break;
+        }
         case "bye":
-          pc.close();
+          cleanup();
           break;
       }
     } catch (err) {
@@ -90,11 +106,22 @@ export function createSenderPeerConnection(
     }
   }
 
+  function cleanup() {
+    if (closed) return;
+    closed = true;
+    (pc as any).removeEventListener("icecandidate", onIce);
+    (pc as any).removeEventListener("connectionstatechange", onConnState);
+    pc.close();
+  }
+
   return {
     pc,
     handleSignalingMessage,
     close() {
-      pc.close();
+      if (!closed) {
+        send({ type: "bye" });
+      }
+      cleanup();
     },
   };
 }
@@ -102,7 +129,7 @@ export function createSenderPeerConnection(
 /**
  * Create a WebRTC peer connection for the Receiver (callee).
  * Waits for an offer, creates an answer, and renders the remote stream.
- * ICE candidates are sent as they are gathered.
+ * ICE candidates are buffered until the remote description is set.
  */
 export function createReceiverPeerConnection(
   send: SendMessage,
@@ -110,9 +137,12 @@ export function createReceiverPeerConnection(
   onConnectionStateChange: OnConnectionStateChange,
 ): WebRTCHandle {
   const pc = new RTCPeerConnection(RTC_CONFIG);
+  let remoteDescSet = false;
+  let closed = false;
+  const pendingCandidates: RTCIceCandidate[] = [];
 
   // Send ICE candidates to the sender as they are gathered
-  (pc as any).addEventListener("icecandidate", (event: any) => {
+  const onIce = (event: any) => {
     if (event.candidate) {
       send({
         type: "ice-candidate",
@@ -121,18 +151,22 @@ export function createReceiverPeerConnection(
         sdpMLineIndex: event.candidate.sdpMLineIndex ?? null,
       });
     }
-  });
+  };
 
   // Receive remote tracks
-  (pc as any).addEventListener("track", (event: any) => {
+  const onTrack = (event: any) => {
     if (event.streams && event.streams.length > 0) {
       onRemoteStream(event.streams[0]);
     }
-  });
+  };
 
-  (pc as any).addEventListener("connectionstatechange", () => {
+  const onConnState = () => {
     onConnectionStateChange(pc.connectionState);
-  });
+  };
+
+  (pc as any).addEventListener("icecandidate", onIce);
+  (pc as any).addEventListener("track", onTrack);
+  (pc as any).addEventListener("connectionstatechange", onConnState);
 
   async function handleSignalingMessage(message: SignalingMessage) {
     try {
@@ -141,6 +175,11 @@ export function createReceiverPeerConnection(
           await pc.setRemoteDescription(
             new RTCSessionDescription({ type: "offer", sdp: message.sdp })
           );
+          remoteDescSet = true;
+          for (const c of pendingCandidates) {
+            await pc.addIceCandidate(c);
+          }
+          pendingCandidates.length = 0;
           const answer = await pc.createAnswer();
           await pc.setLocalDescription(answer);
           send({
@@ -148,17 +187,21 @@ export function createReceiverPeerConnection(
             sdp: answer.sdp,
           });
           break;
-        case "ice-candidate":
-          await pc.addIceCandidate(
-            new RTCIceCandidate({
-              candidate: message.candidate,
-              sdpMid: message.sdpMid,
-              sdpMLineIndex: message.sdpMLineIndex,
-            })
-          );
+        case "ice-candidate": {
+          const candidate = new RTCIceCandidate({
+            candidate: message.candidate,
+            sdpMid: message.sdpMid,
+            sdpMLineIndex: message.sdpMLineIndex,
+          });
+          if (remoteDescSet) {
+            await pc.addIceCandidate(candidate);
+          } else {
+            pendingCandidates.push(candidate);
+          }
           break;
+        }
         case "bye":
-          pc.close();
+          cleanup();
           break;
       }
     } catch (err) {
@@ -166,12 +209,23 @@ export function createReceiverPeerConnection(
     }
   }
 
+  function cleanup() {
+    if (closed) return;
+    closed = true;
+    (pc as any).removeEventListener("icecandidate", onIce);
+    (pc as any).removeEventListener("track", onTrack);
+    (pc as any).removeEventListener("connectionstatechange", onConnState);
+    pc.close();
+  }
+
   return {
     pc,
     handleSignalingMessage,
     close() {
-      send({ type: "bye" });
-      pc.close();
+      if (!closed) {
+        send({ type: "bye" });
+      }
+      cleanup();
     },
   };
 }

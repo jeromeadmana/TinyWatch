@@ -1,4 +1,4 @@
-import { useEffect, useRef, useCallback } from "react";
+import { useEffect, useRef, useCallback, useState } from "react";
 import { useAppStore } from "../store/useAppStore";
 import type { SignalingMessage } from "../types/signaling";
 import {
@@ -15,12 +15,13 @@ interface SignalingHandle {
 
 /**
  * Hook for the Sender: starts a TCP signaling server.
- * Returns a send function for outgoing messages.
+ * Returns a send function for outgoing messages and a connected flag.
  */
 export function useSignalingServer(onMessage: MessageHandler) {
   const handleRef = useRef<SignalingHandle | null>(null);
   const onMessageRef = useRef(onMessage);
   onMessageRef.current = onMessage;
+  const [connected, setConnected] = useState(false);
 
   useEffect(() => {
     const handle = startSignalingServer(
@@ -29,17 +30,21 @@ export function useSignalingServer(onMessage: MessageHandler) {
         const store = useAppStore.getState();
         switch (status) {
           case "listening":
+            setConnected(false);
             store.setConnectionStatus("signaling");
             store.setError(null);
             break;
           case "connected":
+            setConnected(true);
             store.setConnectionStatus("connected");
             store.setError(null);
             break;
           case "disconnected":
+            setConnected(false);
             store.setConnectionStatus("signaling");
             break;
           case "error":
+            setConnected(false);
             store.setConnectionStatus("error");
             store.setError(error ?? "Signaling server error");
             break;
@@ -59,18 +64,19 @@ export function useSignalingServer(onMessage: MessageHandler) {
     handleRef.current?.send(message);
   }, []);
 
-  return { send };
+  return { send, connected };
 }
 
 /**
  * Hook for the Receiver: connects to a TCP signaling server.
  * Call `connect(host)` to initiate the connection.
- * Returns a send function for outgoing messages.
+ * Returns a send function for outgoing messages and a connected flag.
  */
 export function useSignalingClient(onMessage: MessageHandler) {
   const handleRef = useRef<SignalingHandle | null>(null);
   const onMessageRef = useRef(onMessage);
   onMessageRef.current = onMessage;
+  const [connected, setConnected] = useState(false);
 
   // Cleanup on unmount
   useEffect(() => {
@@ -83,6 +89,7 @@ export function useSignalingClient(onMessage: MessageHandler) {
   const connect = useCallback((host: string) => {
     // Close any existing connection
     handleRef.current?.close();
+    setConnected(false);
 
     useAppStore.getState().setConnectionStatus("signaling");
     useAppStore.getState().setError(null);
@@ -94,13 +101,16 @@ export function useSignalingClient(onMessage: MessageHandler) {
         const store = useAppStore.getState();
         switch (status) {
           case "connected":
+            setConnected(true);
             store.setConnectionStatus("connected");
             store.setError(null);
             break;
           case "disconnected":
+            setConnected(false);
             store.setConnectionStatus("idle");
             break;
           case "error":
+            setConnected(false);
             store.setConnectionStatus("error");
             store.setError(error ?? "Connection failed");
             break;
@@ -115,5 +125,5 @@ export function useSignalingClient(onMessage: MessageHandler) {
     handleRef.current?.send(message);
   }, []);
 
-  return { connect, send };
+  return { connect, send, connected };
 }

@@ -8,6 +8,7 @@ import {
 } from "react-native-webrtc";
 import { useKeepAwake } from "expo-keep-awake";
 import type { RootStackParamList } from "../types/navigation";
+import type { SignalingMessage } from "../types/signaling";
 import { useAppStore } from "../store/useAppStore";
 import PermissionGate from "../components/PermissionGate";
 import { useSignalingServer } from "../hooks/useSignaling";
@@ -25,13 +26,17 @@ function CameraPreview({ navigation }: Props) {
   const localIp = useAppStore((s) => s.localIp);
   const streamRef = useRef<MediaStream | null>(null);
 
+  // Explicit ref to break circular dependency between hooks
+  const onWebRTCMessage = useRef<((msg: SignalingMessage) => void) | undefined>(undefined);
+
   // TCP signaling server — pass incoming messages to WebRTC
-  const { send } = useSignalingServer((msg) => {
-    webrtcHandlers.onSignalingMessage(msg);
+  const { send, connected: signalingConnected } = useSignalingServer((msg) => {
+    onWebRTCMessage.current?.(msg);
   });
 
-  // WebRTC peer connection — creates offer when localStream is ready
-  const webrtcHandlers = useSenderWebRTC(localStream, send);
+  // WebRTC peer connection — creates offer when signaling + localStream ready
+  const { onSignalingMessage } = useSenderWebRTC(localStream, send, signalingConnected);
+  onWebRTCMessage.current = onSignalingMessage;
 
   // Resolve local IP address
   useEffect(() => {

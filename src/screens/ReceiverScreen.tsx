@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   View,
   Text,
@@ -11,6 +11,7 @@ import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { RTCView } from "react-native-webrtc";
 import { activateKeepAwake, deactivateKeepAwake } from "expo-keep-awake";
 import type { RootStackParamList } from "../types/navigation";
+import type { SignalingMessage } from "../types/signaling";
 import { useAppStore } from "../store/useAppStore";
 import TcpSocket from "react-native-tcp-socket";
 import { useSignalingClient } from "../hooks/useSignaling";
@@ -25,14 +26,17 @@ export default function ReceiverScreen({ navigation }: Props) {
   const errorMessage = useAppStore((s) => s.errorMessage);
   const [ipInput, setIpInput] = useState("");
 
+  // Explicit ref to break circular dependency between hooks
+  const onWebRTCMessage = useRef<((msg: SignalingMessage) => void) | undefined>(undefined);
+
   // TCP signaling client — pass incoming messages to WebRTC
-  const { connect, send } = useSignalingClient((msg) => {
-    webrtcHandlers.onSignalingMessage(msg);
+  const { connect, send, connected: signalingConnected } = useSignalingClient((msg) => {
+    onWebRTCMessage.current?.(msg);
   });
 
   // WebRTC peer connection — activates when signaling is connected
-  const webrtcHandlers = useReceiverWebRTC(send);
-  const { remoteStream } = webrtcHandlers;
+  const { remoteStream, onSignalingMessage } = useReceiverWebRTC(send, signalingConnected);
+  onWebRTCMessage.current = onSignalingMessage;
 
   const handleConnect = () => {
     const ip = ipInput.trim();
