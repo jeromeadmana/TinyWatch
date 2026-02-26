@@ -19,6 +19,9 @@ import { SIGNALING_PORT } from "../constants/network";
 
 type Props = NativeStackScreenProps<RootStackParamList, "Sender">;
 
+// Stable for the app's lifetime — avoids ghost mDNS entries on screen re-entry
+const DEVICE_NAME = `TinyWatch-${Platform.OS}-${Math.random().toString(36).slice(2, 6)}`;
+
 function CameraPreview({ navigation }: Props) {
   useKeepAwake();
   const [localStream, setLocalStream] = useState<MediaStream | null>(null);
@@ -44,10 +47,7 @@ function CameraPreview({ navigation }: Props) {
     connectionStatus === "signaling" ||
     connectionStatus === "connecting" ||
     connectionStatus === "connected";
-  const deviceNameRef = useRef(
-    `TinyWatch-${Platform.OS}-${Math.random().toString(36).slice(2, 6)}`,
-  );
-  useServicePublisher(deviceNameRef.current, isListening);
+  useServicePublisher(DEVICE_NAME, isListening);
 
   // Resolve local IP address
   useEffect(() => {
