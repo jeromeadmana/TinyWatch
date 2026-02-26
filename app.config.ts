@@ -21,7 +21,8 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
       NSMicrophoneUsageDescription:
         "Microphone captures audio from the baby's room",
       NSLocalNetworkUsageDescription:
-        "Used to connect to the viewer device on your local network",
+        "Used to discover and connect to the camera device on your local network",
+      NSBonjourServices: ["_tinywatch._tcp"],
       UIBackgroundModes: ["audio", "voip"],
     },
   },
@@ -34,13 +35,20 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     permissions: [
       "CAMERA",
       "RECORD_AUDIO",
-      "BLUETOOTH_SCAN",
-      "BLUETOOTH_ADVERTISE",
-      "BLUETOOTH_CONNECT",
+      "ACCESS_WIFI_STATE",
+      "CHANGE_WIFI_MULTICAST_STATE",
     ],
   },
   plugins: [
     "expo-dev-client",
     "@config-plugins/react-native-webrtc",
+    [
+      "expo-build-properties",
+      {
+        android: {
+          usesCleartextTraffic: true,
+        },
+      },
+    ],
   ],
 });

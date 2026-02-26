@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
-import { View, Text, StyleSheet, SafeAreaView } from "react-native";
+import { View, Text, StyleSheet, SafeAreaView, Platform } from "react-native";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import {
   mediaDevices,
@@ -13,6 +13,7 @@ import { useAppStore } from "../store/useAppStore";
 import PermissionGate from "../components/PermissionGate";
 import { useSignalingServer } from "../hooks/useSignaling";
 import { useSenderWebRTC } from "../hooks/useWebRTC";
+import { useServicePublisher } from "../hooks/useDiscovery";
 import { getLocalIpAddress } from "../services/network";
 import { SIGNALING_PORT } from "../constants/network";
 
@@ -37,6 +38,13 @@ function CameraPreview({ navigation }: Props) {
   // WebRTC peer connection — creates offer when signaling + localStream ready
   const { onSignalingMessage } = useSenderWebRTC(localStream, send, signalingConnected);
   onWebRTCMessage.current = onSignalingMessage;
+
+  // Publish mDNS service when signaling server is listening
+  const isListening = connectionStatus === "signaling" || connectionStatus === "connected";
+  const deviceNameRef = useRef(
+    `TinyWatch-${Platform.OS}-${Math.random().toString(36).slice(2, 6)}`,
+  );
+  useServicePublisher(deviceNameRef.current, isListening);
 
   // Resolve local IP address
   useEffect(() => {
@@ -137,9 +145,16 @@ function CameraPreview({ navigation }: Props) {
 
       <View style={styles.footer}>
         {localIp ? (
-          <Text style={styles.ipText}>
-            IP: {localIp}:{SIGNALING_PORT}
-          </Text>
+          <>
+            <Text style={styles.ipText}>
+              IP: {localIp}:{SIGNALING_PORT}
+            </Text>
+            {isListening && (
+              <Text style={styles.discoverableText}>
+                Discoverable on local network
+              </Text>
+            )}
+          </>
         ) : (
           <Text style={styles.ipText}>Detecting IP address...</Text>
         )}
@@ -221,7 +236,12 @@ const styles = StyleSheet.create({
     color: "#aaaacc",
     fontSize: 16,
     fontFamily: "monospace",
-    marginBottom: 12,
+    marginBottom: 4,
+  },
+  discoverableText: {
+    color: "#66aa66",
+    fontSize: 13,
+    marginBottom: 8,
   },
   backLink: {
     color: "#6666aa",

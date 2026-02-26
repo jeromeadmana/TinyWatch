@@ -16,7 +16,7 @@ Build a cross-platform baby monitor mobile app called **TinyWatch** using React 
 | **TypeScript** | Type safety |
 | **react-native-webrtc** | P2P video/audio streaming via WebRTC |
 | **react-native-tcp-socket** | Local TCP signaling (replaces cloud WebSocket server) |
-| **react-native-ble-plx** | BLE device discovery (exchange IP:port between devices) |
+| **react-native-zeroconf** | mDNS/Zeroconf auto-discovery (exchange IP:port on LAN) |
 | **Zustand** | Lightweight state management |
 | **React Navigation** | Screen navigation |
 | **expo-keep-awake** | Prevent screen sleep during monitoring |
@@ -28,8 +28,8 @@ Build a cross-platform baby monitor mobile app called **TinyWatch** using React 
 ```
  SENDER (Camera Phone)                     RECEIVER (Viewer Phone)
  ======================                    ========================
- 1. Start TCP server on port 9090          1. Scan for BLE advertisements
- 2. Advertise IP:port via BLE              2. Read Sender's IP:port from BLE
+ 1. Start TCP server on port 9090          1. Browse for mDNS services
+ 2. Publish mDNS service with IP:port      2. Discover Sender's IP:port via mDNS
          |                                          |
          |<---- TCP signaling connection ------>|
          |                                          |
@@ -44,8 +44,8 @@ Build a cross-platform baby monitor mobile app called **TinyWatch** using React 
 **Key design decisions:**
 - **No cloud server needed** — TCP signaling runs locally on the Sender device
 - **No STUN/TURN servers** — both devices on same subnet, host ICE candidates suffice (`iceServers: []`)
-- **BLE for discovery only** — bandwidth too low for video; used to exchange Sender's IP:port
-- **Manual IP fallback** — if BLE fails, user can type the Sender's displayed IP address
+- **mDNS for discovery only** — used to exchange Sender's IP:port on the local network
+- **Manual IP fallback** — if mDNS fails, user can type the Sender's displayed IP address
 
 ---
 
@@ -68,7 +68,7 @@ C:\sources\TinyWatch\
 |   |-- services/
 |   |   |-- signaling.ts             # TCP server/client for SDP exchange
 |   |   |-- webrtc.ts                # RTCPeerConnection lifecycle
-|   |   |-- ble-discovery.ts         # BLE advertise (sender) / scan (receiver)
+|   |   |-- discovery.ts             # mDNS publish (sender) / browse (receiver)
 |   |   |-- network.ts               # Get local IP address
 |   |   |-- permissions.ts           # Camera, mic, BLE permission helpers
 |   |
@@ -83,7 +83,7 @@ C:\sources\TinyWatch\
 |   |
 |   |-- hooks/
 |   |   |-- useWebRTC.ts             # WebRTC lifecycle hook
-|   |   |-- useBLEDiscovery.ts       # BLE scan/advertise hook
+|   |   |-- useDiscovery.ts          # mDNS publish/browse hooks
 |   |   |-- useSignaling.ts          # TCP signaling hook
 |   |   |-- usePermissions.ts        # Permission request hook
 |   |
@@ -92,8 +92,7 @@ C:\sources\TinyWatch\
 |   |   |-- navigation.ts            # Navigation param types
 |   |
 |   |-- constants/
-|       |-- ble.ts                   # BLE UUIDs
-|       |-- network.ts               # Default port, timeouts
+|       |-- network.ts               # Default port, timeouts, mDNS service config
 |       |-- webrtc.ts                # RTCPeerConnection config
 ```
 
@@ -136,15 +135,17 @@ C:\sources\TinyWatch\
 - Handle disconnection/reconnection
 - Test end-to-end: Sender streams camera, Receiver views it (hardcoded IP)
 
-### Phase 5: BLE Device Discovery
-- Install `react-native-ble-plx` + `@config-plugins/react-native-ble-plx`
+### Phase 5: mDNS/Zeroconf Auto-Discovery
+> **Note:** Originally planned as BLE, but `react-native-ble-plx` cannot act as a BLE peripheral (GATT server). mDNS/Zeroconf is the standard protocol for local network service discovery and a better fit since both devices are already on the same WiFi.
+
+- Install `react-native-zeroconf` + `expo-build-properties`
 - Rebuild native projects
-- Build `ble-discovery.ts` service:
-  - Sender: advertise custom BLE service with IP:port as characteristic
-  - Receiver: scan for service UUID, read IP:port, stop BLE
-- Get local IP via `react-native-network-info` or TCP server address
-- Wire together: BLE discovery -> TCP signaling -> WebRTC streaming
-- Add manual IP entry as fallback if BLE fails
+- Build `discovery.ts` service:
+  - Sender: publish `_tinywatch._tcp` mDNS service with IP:port when TCP server starts
+  - Receiver: browse for `_tinywatch._tcp` services, display discovered senders
+- Update `app.config.ts`: iOS `NSBonjourServices`, Android multicast permissions
+- Update `SenderScreen`: publish mDNS service, show "Discoverable" indicator
+- Update `ReceiverScreen`: show discovered devices list with tap-to-connect, keep manual IP entry as fallback
 
 ### Phase 6: Polish + Background Mode
 - Android: foreground service via `react-native-background-actions` with persistent notification
@@ -169,15 +170,16 @@ C:\sources\TinyWatch\
 ```typescript
 plugins: [
   "@config-plugins/react-native-webrtc",
-  ["react-native-ble-plx", { isBackgroundEnabled: true, neverForLocation: true }]
+  ["expo-build-properties", { android: { usesCleartextTraffic: true } }]
 ],
 android: {
-  permissions: ["CAMERA", "RECORD_AUDIO", "BLUETOOTH_SCAN", "BLUETOOTH_ADVERTISE", "BLUETOOTH_CONNECT"]
+  permissions: ["CAMERA", "RECORD_AUDIO", "ACCESS_WIFI_STATE", "CHANGE_WIFI_MULTICAST_STATE"]
 },
 ios: {
   infoPlist: {
     NSCameraUsageDescription: "Camera is used to monitor your baby",
     NSMicrophoneUsageDescription: "Microphone captures audio from the baby's room",
+    NSBonjourServices: ["_tinywatch._tcp"],
     UIBackgroundModes: ["audio", "voip"]
   }
 }
@@ -190,7 +192,7 @@ ios: {
 | Challenge | Risk | Mitigation |
 |---|---|---|
 | iOS background streaming | Medium | `UIBackgroundModes: audio/voip` keeps app alive while audio is active |
-| BLE discovery differences (iOS vs Android) | Medium | Use GATT characteristic read (works on both); manual IP fallback |
+| mDNS discovery differences (iOS vs Android) | Low | Standard protocol, well-supported on both; manual IP fallback |
 | AP isolation on some WiFi networks | Low | Document as known limitation; devices must be on same subnet |
 | TCP message framing | Low | Use newline-delimited JSON with proper buffering |
 
@@ -212,5 +214,5 @@ ios: {
 2. **Phase 2**: Camera preview shows on Sender screen
 3. **Phase 3**: Two devices exchange test messages via TCP (hardcoded IP)
 4. **Phase 4**: Receiver sees Sender's camera feed with audio — **core MVP test**
-5. **Phase 5**: Devices discover each other via BLE without manual IP entry
+5. **Phase 5**: Devices discover each other via mDNS without manual IP entry
 6. **Phase 6**: Stream continues when Sender app is backgrounded
