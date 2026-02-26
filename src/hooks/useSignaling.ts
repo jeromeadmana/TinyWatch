@@ -36,7 +36,8 @@ export function useSignalingServer(onMessage: MessageHandler) {
             break;
           case "connected":
             setConnected(true);
-            store.setConnectionStatus("connected");
+            // Don't set store "connected" — let WebRTC hooks own that transition.
+            // The local `connected` flag drives useSenderWebRTC activation.
             store.setError(null);
             break;
           case "disconnected":
@@ -102,7 +103,8 @@ export function useSignalingClient(onMessage: MessageHandler) {
         switch (status) {
           case "connected":
             setConnected(true);
-            store.setConnectionStatus("connected");
+            // Don't set store "connected" — let WebRTC hooks own that transition.
+            // The local `connected` flag drives useReceiverWebRTC activation.
             store.setError(null);
             break;
           case "disconnected":
