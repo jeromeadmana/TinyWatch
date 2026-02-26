@@ -50,7 +50,7 @@ export default function ReceiverScreen({ navigation }: Props) {
     (device: DiscoveredDevice) => {
       stopBrowsing();
       useAppStore.getState().setError(null);
-      connect(device.host);
+      connect(device.host, device.port);
     },
     [connect, stopBrowsing],
   );

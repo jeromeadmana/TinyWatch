@@ -87,7 +87,7 @@ export function useSignalingClient(onMessage: MessageHandler) {
     };
   }, []);
 
-  const connect = useCallback((host: string) => {
+  const connect = useCallback((host: string, port?: number) => {
     // Close any existing connection
     handleRef.current?.close();
     setConnected(false);
@@ -97,6 +97,7 @@ export function useSignalingClient(onMessage: MessageHandler) {
 
     const handle = connectToSignalingServer(
       host,
+      port,
       (msg) => onMessageRef.current(msg),
       (status, error) => {
         const store = useAppStore.getState();

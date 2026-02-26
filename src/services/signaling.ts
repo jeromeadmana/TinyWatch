@@ -142,6 +142,7 @@ export function startSignalingServer(
  */
 export function connectToSignalingServer(
   host: string,
+  port: number = SIGNALING_PORT,
   onMessage: MessageHandler,
   onStatus: StatusHandler,
 ): SignalingClient {
@@ -149,7 +150,7 @@ export function connectToSignalingServer(
 
   const socket = TcpSocket.createConnection(
     {
-      port: SIGNALING_PORT,
+      port,
       host,
       interface: "wifi",
       connectTimeout: CONNECT_TIMEOUT_MS,
