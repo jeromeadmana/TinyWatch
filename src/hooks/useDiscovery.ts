@@ -36,12 +36,16 @@ export function useServicePublisher(deviceName: string, isListening: boolean) {
 /**
  * Hook for the Receiver: scans for TinyWatch senders via mDNS.
  * Updates discoveredDevices in the store.
- * Returns stopBrowsing() for manual control (e.g. when user selects a device).
+ * Returns startBrowsing() to (re)start scanning and stopBrowsing() to stop.
  */
 export function useServiceBrowser() {
   const handleRef = useRef<BrowserHandle | null>(null);
 
-  useEffect(() => {
+  const startBrowsing = useCallback(() => {
+    // Stop any existing scan first
+    handleRef.current?.close();
+    handleRef.current = null;
+
     const store = useAppStore.getState();
     store.setConnectionStatus("discovering");
     store.setError(null);
@@ -59,18 +63,23 @@ export function useServiceBrowser() {
     );
 
     handleRef.current = handle;
+  }, []);
+
+  // Start scanning on mount, clean up on unmount
+  useEffect(() => {
+    startBrowsing();
 
     return () => {
-      handle.close();
+      handleRef.current?.close();
       handleRef.current = null;
       useAppStore.getState().setDiscoveredDevices([]);
     };
-  }, []);
+  }, [startBrowsing]);
 
   const stopBrowsing = useCallback(() => {
     handleRef.current?.close();
     handleRef.current = null;
   }, []);
 
-  return { stopBrowsing };
+  return { startBrowsing, stopBrowsing };
 }

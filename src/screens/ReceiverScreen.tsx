@@ -43,7 +43,7 @@ export default function ReceiverScreen({ navigation }: Props) {
   onWebRTCMessage.current = onSignalingMessage;
 
   // mDNS service browser — starts scanning on mount
-  const { stopBrowsing } = useServiceBrowser();
+  const { startBrowsing, stopBrowsing } = useServiceBrowser();
 
   // Connect to a discovered device
   const handleSelectDevice = useCallback(
@@ -208,6 +208,19 @@ export default function ReceiverScreen({ navigation }: Props) {
           {errorMessage && (
             <Text style={styles.errorText}>{errorMessage}</Text>
           )}
+
+          {/* Scan again after connection failure */}
+          {connectionStatus === "error" && (
+            <TouchableOpacity
+              style={styles.retryButton}
+              onPress={() => {
+                setShowManualInput(false);
+                startBrowsing();
+              }}
+            >
+              <Text style={styles.retryButtonText}>Scan again</Text>
+            </TouchableOpacity>
+          )}
         </View>
       )}
 
@@ -351,6 +364,15 @@ const styles = StyleSheet.create({
     fontSize: 14,
     textAlign: "center",
     marginTop: 10,
+  },
+  retryButton: {
+    marginTop: 12,
+  },
+  retryButtonText: {
+    color: "#6666aa",
+    fontSize: 14,
+    textDecorationLine: "underline",
+    textAlign: "center",
   },
   footer: {
     padding: 20,
