@@ -40,7 +40,10 @@ function CameraPreview({ navigation }: Props) {
   onWebRTCMessage.current = onSignalingMessage;
 
   // Publish mDNS service when signaling server is listening
-  const isListening = connectionStatus === "signaling" || connectionStatus === "connected";
+  const isListening =
+    connectionStatus === "signaling" ||
+    connectionStatus === "connecting" ||
+    connectionStatus === "connected";
   const deviceNameRef = useRef(
     `TinyWatch-${Platform.OS}-${Math.random().toString(36).slice(2, 6)}`,
   );
