@@ -112,7 +112,9 @@ export function browseForSenders(
   zc.on("error", (err) => {
     console.error("mDNS browse error:", err);
     if (!closed) {
-      onStatus("error", err?.message ?? "mDNS browse failed");
+      const msg =
+        typeof err === "string" ? err : err?.message ?? "mDNS browse failed";
+      onStatus("error", msg);
     }
   });
 
