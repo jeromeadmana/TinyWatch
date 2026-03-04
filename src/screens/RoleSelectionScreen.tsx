@@ -34,7 +34,7 @@ export default function RoleSelectionScreen({ navigation }: Props) {
 
       <View style={styles.buttonContainer}>
         <TouchableOpacity
-          style={[styles.roleButton, styles.cameraButton]}
+          style={styles.roleButton}
           onPress={handleSelectCamera}
         >
           <Text style={styles.roleIcon}>📷</Text>
@@ -45,7 +45,7 @@ export default function RoleSelectionScreen({ navigation }: Props) {
         </TouchableOpacity>
 
         <TouchableOpacity
-          style={[styles.roleButton, styles.viewerButton]}
+          style={styles.roleButton}
           onPress={handleSelectViewer}
         >
           <Text style={styles.roleIcon}>📺</Text>
@@ -91,13 +91,6 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     padding: 24,
     alignItems: "center",
-  },
-  cameraButton: {
-    backgroundColor: "#16213e",
-    borderWidth: 1,
-    borderColor: "#0f3460",
-  },
-  viewerButton: {
     backgroundColor: "#16213e",
     borderWidth: 1,
     borderColor: "#0f3460",
