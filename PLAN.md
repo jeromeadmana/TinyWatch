@@ -70,16 +70,13 @@ C:\sources\TinyWatch\
 |   |   |-- webrtc.ts                # RTCPeerConnection lifecycle
 |   |   |-- discovery.ts             # mDNS publish (sender) / browse (receiver)
 |   |   |-- network.ts               # Get local IP address
-|   |   |-- permissions.ts           # Camera, mic, BLE permission helpers
+|   |   |-- permissions.ts           # Camera + mic permission helpers
 |   |
 |   |-- store/
 |   |   |-- useAppStore.ts           # Zustand store
 |   |
 |   |-- components/
-|   |   |-- VideoView.tsx            # RTCView wrapper
-|   |   |-- ConnectionStatus.tsx     # Status indicator
 |   |   |-- PermissionGate.tsx       # Permission check wrapper
-|   |   |-- ErrorBanner.tsx          # Error display with retry
 |   |
 |   |-- hooks/
 |   |   |-- useWebRTC.ts             # WebRTC lifecycle hook
