@@ -67,7 +67,7 @@ function isValidSignalingMessage(obj: unknown): obj is SignalingMessage {
 export function startSignalingServer(
   onMessage: MessageHandler,
   onStatus: StatusHandler,
-): SignalingServer & SignalingClient {
+): SignalingServer & SignalingClient & { disconnectClient: () => void } {
   let clientSocket: InstanceType<typeof TcpSocket.Socket> | null = null;
   let serverClosed = false;
 
@@ -122,6 +122,12 @@ export function startSignalingServer(
       } else {
         console.warn("Signaling: cannot send, no client connected. Type:", message.type);
       }
+    },
+    disconnectClient() {
+      if (clientSocket && !clientSocket.destroyed) {
+        clientSocket.destroy();
+      }
+      clientSocket = null;
     },
     close() {
       serverClosed = true;

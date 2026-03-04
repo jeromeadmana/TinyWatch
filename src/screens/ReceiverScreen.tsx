@@ -33,7 +33,7 @@ export default function ReceiverScreen({ navigation }: Props) {
   const onWebRTCMessage = useRef<((msg: SignalingMessage) => void) | undefined>(undefined);
 
   // TCP signaling client — pass incoming messages to WebRTC
-  const { connect, send, connected: signalingConnected } = useSignalingClient((msg) => {
+  const { connect, send, connected: signalingConnected, disconnect } = useSignalingClient((msg) => {
     onWebRTCMessage.current?.(msg);
   });
 
@@ -53,6 +53,13 @@ export default function ReceiverScreen({ navigation }: Props) {
     },
     [connect, stopBrowsing],
   );
+
+  // Disconnect and return to discovery
+  const handleDisconnect = useCallback(() => {
+    disconnect();
+    setShowManualInput(false);
+    startBrowsing();
+  }, [disconnect, startBrowsing]);
 
   // Manual IP connect
   const handleConnect = useCallback(() => {
@@ -140,6 +147,17 @@ export default function ReceiverScreen({ navigation }: Props) {
           </Text>
         )}
       </View>
+
+      {isConnected && (
+        <View style={styles.connectSection}>
+          <TouchableOpacity
+            style={styles.disconnectButton}
+            onPress={handleDisconnect}
+          >
+            <Text style={styles.disconnectButtonText}>Disconnect</Text>
+          </TouchableOpacity>
+        </View>
+      )}
 
       {!isConnected && (
         <View style={styles.connectSection}>
@@ -363,6 +381,17 @@ const styles = StyleSheet.create({
     fontSize: 14,
     textAlign: "center",
     marginTop: 10,
+  },
+  disconnectButton: {
+    backgroundColor: "#602020",
+    paddingHorizontal: 32,
+    paddingVertical: 14,
+    borderRadius: 10,
+  },
+  disconnectButtonText: {
+    color: "#e0e0e0",
+    fontSize: 16,
+    fontWeight: "600",
   },
   retryButton: {
     marginTop: 12,

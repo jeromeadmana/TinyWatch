@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
-import { View, Text, StyleSheet, SafeAreaView, Platform } from "react-native";
+import { View, Text, StyleSheet, SafeAreaView, Platform, TouchableOpacity } from "react-native";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import {
   mediaDevices,
@@ -34,7 +34,7 @@ function CameraPreview({ navigation }: Props) {
   const onWebRTCMessage = useRef<((msg: SignalingMessage) => void) | undefined>(undefined);
 
   // TCP signaling server — pass incoming messages to WebRTC
-  const { send, connected: signalingConnected } = useSignalingServer((msg) => {
+  const { send, connected: signalingConnected, disconnectViewer } = useSignalingServer((msg) => {
     onWebRTCMessage.current?.(msg);
   });
 
@@ -161,6 +161,14 @@ function CameraPreview({ navigation }: Props) {
         ) : (
           <Text style={styles.ipText}>Detecting IP address...</Text>
         )}
+        {connectionStatus === "connected" && (
+          <TouchableOpacity
+            style={styles.disconnectButton}
+            onPress={disconnectViewer}
+          >
+            <Text style={styles.disconnectButtonText}>Disconnect Viewer</Text>
+          </TouchableOpacity>
+        )}
         <Text
           style={styles.backLink}
           onPress={() => {
@@ -245,6 +253,18 @@ const styles = StyleSheet.create({
     color: "#66aa66",
     fontSize: 13,
     marginBottom: 8,
+  },
+  disconnectButton: {
+    backgroundColor: "#602020",
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 10,
+    marginBottom: 12,
+  },
+  disconnectButtonText: {
+    color: "#e0e0e0",
+    fontSize: 15,
+    fontWeight: "600",
   },
   backLink: {
     color: "#6666aa",

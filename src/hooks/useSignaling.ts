@@ -11,6 +11,7 @@ type MessageHandler = (message: SignalingMessage) => void;
 interface SignalingHandle {
   send: (message: SignalingMessage) => void;
   close: () => void;
+  disconnectClient?: () => void;
 }
 
 /**
@@ -65,7 +66,11 @@ export function useSignalingServer(onMessage: MessageHandler) {
     handleRef.current?.send(message);
   }, []);
 
-  return { send, connected };
+  const disconnectViewer = useCallback(() => {
+    handleRef.current?.disconnectClient?.();
+  }, []);
+
+  return { send, connected, disconnectViewer };
 }
 
 /**
@@ -128,5 +133,12 @@ export function useSignalingClient(onMessage: MessageHandler) {
     handleRef.current?.send(message);
   }, []);
 
-  return { connect, send, connected };
+  const disconnect = useCallback(() => {
+    handleRef.current?.close();
+    handleRef.current = null;
+    setConnected(false);
+    useAppStore.getState().setConnectionStatus("idle");
+  }, []);
+
+  return { connect, send, connected, disconnect };
 }
