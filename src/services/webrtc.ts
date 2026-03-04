@@ -30,6 +30,10 @@ export function createSenderPeerConnection(
   const pc = new RTCPeerConnection(RTC_CONFIG);
   let remoteDescSet = false;
   let closed = false;
+  let iceRetryCount = 0;
+  let retryTimer: ReturnType<typeof setTimeout> | null = null;
+  const MAX_ICE_RETRIES = 3;
+  const ICE_RETRY_DELAY_MS = 2000;
   const pendingCandidates: RTCIceCandidate[] = [];
 
   // Add local tracks to the connection
@@ -49,8 +53,33 @@ export function createSenderPeerConnection(
     }
   };
 
+  async function attemptIceRestart() {
+    if (closed) return;
+    try {
+      console.log(`WebRTC: ICE restart attempt ${iceRetryCount}/${MAX_ICE_RETRIES}`);
+      const offer = await pc.createOffer({ iceRestart: true } as any);
+      await pc.setLocalDescription(offer);
+      remoteDescSet = false;
+      pendingCandidates.length = 0;
+      send({ type: "offer", sdp: offer.sdp });
+    } catch (err) {
+      console.error("WebRTC: ICE restart failed:", err);
+      onConnectionStateChange("failed");
+    }
+  }
+
   const onConnState = () => {
-    onConnectionStateChange(pc.connectionState);
+    const state = pc.connectionState;
+    if (state === "connected") {
+      iceRetryCount = 0;
+    }
+    if (state === "failed" && iceRetryCount < MAX_ICE_RETRIES && !closed) {
+      iceRetryCount++;
+      onConnectionStateChange("connecting");
+      retryTimer = setTimeout(() => attemptIceRestart(), ICE_RETRY_DELAY_MS);
+      return;
+    }
+    onConnectionStateChange(state);
   };
 
   (pc as any).addEventListener("icecandidate", onIce);
@@ -109,6 +138,7 @@ export function createSenderPeerConnection(
   function cleanup() {
     if (closed) return;
     closed = true;
+    if (retryTimer) clearTimeout(retryTimer);
     (pc as any).removeEventListener("icecandidate", onIce);
     (pc as any).removeEventListener("connectionstatechange", onConnState);
     pc.close();
