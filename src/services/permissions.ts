@@ -3,6 +3,10 @@ import { mediaDevices } from "react-native-webrtc";
 
 export type PermissionStatus = "granted" | "denied" | "undetermined";
 
+// Track whether we've requested iOS permissions this session so
+// checkCameraAndMicPermissions can do a real probe afterwards.
+let iosPermissionsRequested = false;
+
 export async function requestCameraAndMicPermissions(): Promise<PermissionStatus> {
   if (Platform.OS === "android") {
     const grants = await PermissionsAndroid.requestMultiple([
@@ -30,8 +34,10 @@ export async function requestCameraAndMicPermissions(): Promise<PermissionStatus
     // Stop the tracks immediately — we just needed the permission prompt
     stream.getTracks().forEach((t: { stop: () => void }) => t.stop());
     (stream as any).release?.(true);
+    iosPermissionsRequested = true;
     return "granted";
   } catch {
+    iosPermissionsRequested = true;
     return "denied";
   }
 }
@@ -49,7 +55,17 @@ export async function checkCameraAndMicPermissions(): Promise<PermissionStatus> 
     return "undetermined";
   }
 
-  // iOS: no reliable way to check without requesting; assume undetermined.
-  // The PermissionGate will show "Grant Permissions" which triggers requestCameraAndMicPermissions.
-  return "undetermined";
+  // iOS: no native check-only API. If we've already requested this session,
+  // probe with getUserMedia (it won't re-prompt). Otherwise return undetermined
+  // so the PermissionGate shows the explanation screen first.
+  if (!iosPermissionsRequested) return "undetermined";
+
+  try {
+    const stream = await mediaDevices.getUserMedia({ video: true, audio: true });
+    stream.getTracks().forEach((t: { stop: () => void }) => t.stop());
+    (stream as any).release?.(true);
+    return "granted";
+  } catch {
+    return "denied";
+  }
 }
