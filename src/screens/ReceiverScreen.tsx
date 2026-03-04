@@ -15,6 +15,7 @@ import type { RootStackParamList } from "../types/navigation";
 import type { SignalingMessage } from "../types/signaling";
 import { useAppStore, type DiscoveredDevice } from "../store/useAppStore";
 import { useSignalingClient } from "../hooks/useSignaling";
+import { useBackgroundMode } from "../hooks/useBackgroundMode";
 import { useReceiverWebRTC } from "../hooks/useWebRTC";
 import { useServiceBrowser } from "../hooks/useDiscovery";
 
@@ -43,6 +44,9 @@ export default function ReceiverScreen({ navigation }: Props) {
 
   // mDNS service browser — starts scanning on mount
   const { startBrowsing, stopBrowsing } = useServiceBrowser();
+
+  // Keep alive when backgrounded during active streaming
+  useBackgroundMode(connectionStatus === "connected");
 
   // Connect to a discovered device
   const handleSelectDevice = useCallback(

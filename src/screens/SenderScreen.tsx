@@ -14,6 +14,7 @@ import PermissionGate from "../components/PermissionGate";
 import { useSignalingServer } from "../hooks/useSignaling";
 import { useSenderWebRTC } from "../hooks/useWebRTC";
 import { useServicePublisher } from "../hooks/useDiscovery";
+import { useBackgroundMode } from "../hooks/useBackgroundMode";
 import { getLocalIpAddress } from "../services/network";
 import { SIGNALING_PORT } from "../constants/network";
 
@@ -48,6 +49,9 @@ function CameraPreview({ navigation }: Props) {
     connectionStatus === "connecting" ||
     connectionStatus === "connected";
   useServicePublisher(DEVICE_NAME, isListening);
+
+  // Keep alive when backgrounded during active streaming
+  useBackgroundMode(connectionStatus === "connected");
 
   // Resolve local IP address
   useEffect(() => {
