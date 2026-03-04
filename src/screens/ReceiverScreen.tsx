@@ -15,6 +15,7 @@ import type { RootStackParamList } from "../types/navigation";
 import type { SignalingMessage } from "../types/signaling";
 import { useAppStore, type DiscoveredDevice } from "../store/useAppStore";
 import { useSignalingClient } from "../hooks/useSignaling";
+import StatusDot from "../components/StatusDot";
 import { useBackgroundMode } from "../hooks/useBackgroundMode";
 import { useReceiverWebRTC } from "../hooks/useWebRTC";
 import { useServiceBrowser } from "../hooks/useDiscovery";
@@ -121,14 +122,17 @@ export default function ReceiverScreen({ navigation }: Props) {
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
         <Text style={styles.title}>Viewer Mode</Text>
-        <Text
-          style={[
-            styles.status,
-            isConnected && remoteStream && styles.statusConnected,
-          ]}
-        >
-          {statusLabel}
-        </Text>
+        <View style={styles.statusRow}>
+          <StatusDot status={connectionStatus} />
+          <Text
+            style={[
+              styles.status,
+              isConnected && remoteStream && styles.statusConnected,
+            ]}
+          >
+            {statusLabel}
+          </Text>
+        </View>
       </View>
 
       <View style={styles.videoArea}>
@@ -273,10 +277,14 @@ const styles = StyleSheet.create({
     fontWeight: "bold",
     color: "#e0e0e0",
   },
+  statusRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginTop: 4,
+  },
   status: {
     fontSize: 14,
     color: "#8888aa",
-    marginTop: 4,
   },
   statusConnected: {
     color: "#66aa66",

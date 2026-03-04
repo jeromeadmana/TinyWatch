@@ -11,6 +11,7 @@ import type { RootStackParamList } from "../types/navigation";
 import type { SignalingMessage } from "../types/signaling";
 import { useAppStore } from "../store/useAppStore";
 import PermissionGate from "../components/PermissionGate";
+import StatusDot from "../components/StatusDot";
 import { useSignalingServer } from "../hooks/useSignaling";
 import { useSenderWebRTC } from "../hooks/useWebRTC";
 import { useServicePublisher } from "../hooks/useDiscovery";
@@ -125,14 +126,17 @@ function CameraPreview({ navigation }: Props) {
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
         <Text style={styles.title}>Camera Mode</Text>
-        <Text
-          style={[
-            styles.status,
-            connectionStatus === "connected" && styles.statusConnected,
-          ]}
-        >
-          {statusLabel}
-        </Text>
+        <View style={styles.statusRow}>
+          <StatusDot status={connectionStatus} />
+          <Text
+            style={[
+              styles.status,
+              connectionStatus === "connected" && styles.statusConnected,
+            ]}
+          >
+            {statusLabel}
+          </Text>
+        </View>
       </View>
 
       <View style={styles.preview}>
@@ -212,10 +216,14 @@ const styles = StyleSheet.create({
     fontWeight: "bold",
     color: "#e0e0e0",
   },
+  statusRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginTop: 4,
+  },
   status: {
     fontSize: 14,
     color: "#8888aa",
-    marginTop: 4,
   },
   statusConnected: {
     color: "#66aa66",
